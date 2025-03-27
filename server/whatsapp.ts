@@ -47,12 +47,21 @@ class WhatsAppClient {
       try {
         this.logMessage(sessionId, 'Verifying API token...', 'info');
         
-        // In a real implementation, we would validate the token with Meta's API
-        // For example, we could fetch the business profile using the token
-        // This is simulated for now since we can't make real API calls without a valid token
+        // Make a real API call to verify the token
+        const businessProfileUrl = `${this.baseApiUrl}/${phoneNumber}/whatsapp_business_profile`;
+        const response = await fetch(businessProfileUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${credentials.apiToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
         
-        // Simulate validation by waiting
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Check if the response is valid
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+          throw new Error(`API verification failed: ${errorData.error?.message || 'Unknown error'}`);
+        }
         
         // Update session status
         const session = this.sessions.get(sessionId);
@@ -246,50 +255,54 @@ class WhatsAppClient {
         attempts++;
         
         try {
-          // In a real implementation, this would make an actual API call to WhatsApp
-          // For example:
-          // const response = await fetch(`${this.baseApiUrl}/${phoneNumber}/messages`, {
-          //   method: 'POST',
-          //   headers: {
-          //     'Content-Type': 'application/json',
-          //     'Authorization': `Bearer ${apiToken}`
-          //   },
-          //   body: JSON.stringify({
-          //     messaging_product: 'whatsapp',
-          //     recipient_type: 'individual',
-          //     to: recipient,
-          //     type: 'text',
-          //     text: { body: messageContent }
-          //   })
-          // });
+          // Make a real API call to WhatsApp Business API
+          const response = await fetch(`${this.baseApiUrl}/${phoneNumber}/messages`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiToken}`
+            },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              recipient_type: 'individual',
+              to: recipient,
+              type: 'text',
+              text: { body: messageContent }
+            })
+          });
           
-          // For now, we simulate the API call with a high success rate for demo purposes
-          await new Promise(resolve => setTimeout(resolve, 800));
+          const responseData = await response.json();
           
-          // Simulate 90% success rate 
-          if (Math.random() <= 0.9) {
-            success = true;
-            
-            // Store successful message
-            await storage.createMessage({
-              sessionId,
-              recipient,
-              message: messageContent,
-              status: 'delivered'
-            });
-            
+          if (!response.ok) {
+            throw new Error(responseData.error?.message || 'Error sending message');
+          }
+          
+          // Message sent successfully
+          success = true;
+          
+          // Store successful message
+          await storage.createMessage({
+            sessionId,
+            recipient,
+            message: messageContent,
+            status: 'delivered'
+          });
+          
+          this.logMessage(
+            sessionId, 
+            attempts > 1 
+              ? `✓ Message delivered to ${recipient} on retry ${attempts}` 
+              : `✓ Message delivered to ${recipient}`, 
+            'success'
+          );
+          
+          // Log message ID if available
+          if (responseData.messages && responseData.messages.length > 0) {
             this.logMessage(
-              sessionId, 
-              attempts > 1 
-                ? `✓ Message delivered to ${recipient} on retry ${attempts}` 
-                : `✓ Message delivered to ${recipient}`, 
-              'success'
+              sessionId,
+              `Message ID: ${responseData.messages[0].id}`,
+              'info'
             );
-          } else {
-            // Simulate different types of API errors
-            const errors = ['rate_limit', 'invalid_recipient', 'api_timeout', 'authentication_error'];
-            const randomError = errors[Math.floor(Math.random() * errors.length)];
-            throw new Error(randomError);
           }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
