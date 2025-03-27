@@ -20,17 +20,24 @@ Această aplicație permite trimiterea de mesaje WhatsApp folosind WhatsApp Busi
 
 ## Configurare pentru Deployment
 
-### Pregătire pentru Render
+### Opțiunea 1: Deployment cu render.yaml (recomandat)
+
+1. Creați un cont pe [Render](https://render.com) dacă nu aveți deja unul
+2. Din dashboard-ul Render, accesați "Blueprints"
+3. Conectați repository-ul Git care conține codul aplicației
+4. Fișierul `render.yaml` inclus în repository va configura automat serviciul
+5. Urmați pașii din interfața Render pentru a finaliza deployment-ul
+
+### Opțiunea 2: Deployment manual
 
 1. Creați un cont pe [Render](https://render.com) dacă nu aveți deja unul
 2. Creați un nou Web Service
 3. Conectați repository-ul Git care conține codul aplicației
-
-### Setări Render
-
-- **Build Command**: `npm install`
-- **Start Command**: `npm run start`
-- **Environment Variables**: Nu este necesară configurarea variabilelor de mediu suplimentare
+4. Configurați manual următoarele setări:
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm run start`
+   - **Environment Variables**: Nu este necesară configurarea variabilelor de mediu suplimentare
+   - **Health Check Path**: `/api/health`
 
 ### Obținerea unui token WhatsApp Business API
 

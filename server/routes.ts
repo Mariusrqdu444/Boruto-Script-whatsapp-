@@ -45,6 +45,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(200).json({ status: "ok" });
   });
 
+  app.get("/api/health", (req, res) => {
+    res.status(200).json({ status: "ok" });
+  });
+
   app.get("/api/ping", (req, res) => {
     res.status(200).json({ status: "ok" });
   });
