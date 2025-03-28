@@ -11,3 +11,15 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+/* Fix for Replit environment WebSocket issues */
+/* Increase loading appearance time to handle slower connections */
+.loading-indicator {
+  opacity: 1;
+  transition: opacity 1.5s ease-in-out;
+}
+
+/* Better error visibility */
+.error-message {
+  @apply bg-red-950/30 text-red-400 p-2 rounded-md border border-red-900 mt-2 mb-2;
+}

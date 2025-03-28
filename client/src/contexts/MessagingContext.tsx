@@ -167,15 +167,57 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      const response = await fetch('/api/whatsapp/initialize', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || response.statusText);
+      // Add timeout and retry logic for initialize request in Replit environment
+      let attempts = 0;
+      let response;
+      const maxAttempts = 3;
+      
+      while (attempts < maxAttempts) {
+        try {
+          // Add timeout to handle slow connections
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
+          
+          response = await fetch('/api/whatsapp/initialize', {
+            method: 'POST',
+            body: formData,
+            credentials: 'include',
+            signal: controller.signal
+          }).finally(() => clearTimeout(timeoutId));
+          
+          if (response.ok) {
+            break; // Success, exit the retry loop
+          } else {
+            // Only retry on certain status codes
+            if (response.status >= 500 || response.status === 429) {
+              attempts++;
+              if (attempts < maxAttempts) {
+                addLog(`Connection attempt ${attempts} failed (${response.status}), retrying...`, 'warning');
+                await new Promise(r => setTimeout(r, 2000)); // Wait before retry
+              }
+            } else {
+              // Don't retry on client errors except rate limiting
+              break;
+            }
+          }
+        } catch (error) {
+          attempts++;
+          if (error instanceof Error && error.name === 'AbortError') {
+            addLog(`Connection timeout (attempt ${attempts}/${maxAttempts})`, 'warning');
+          } else {
+            addLog(`Connection error (attempt ${attempts}/${maxAttempts}): ${error instanceof Error ? error.message : String(error)}`, 'warning');
+          }
+          
+          if (attempts < maxAttempts) {
+            await new Promise(r => setTimeout(r, 2000)); // Wait before retry
+          }
+        }
+      }
+      
+      // Final error handling after all attempts
+      if (!response || !response.ok) {
+        const errorText = response ? await response.text() : 'Connection failed after multiple attempts';
+        throw new Error(errorText || (response ? response.statusText : 'Network error'));
       }
 
       const { sessionId } = await response.json();
@@ -191,7 +233,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         throw new Error(errorText || startResponse.statusText);
       }
       
-      // Start polling for message status
+      // Start polling for message status with improved reliability for Replit environment
       const statusPolling = setInterval(async () => {
         if (!isMessaging) {
           clearInterval(statusPolling);
@@ -199,17 +241,29 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         }
         
         try {
+          // Add timeout to handle slow Replit connections
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          
           const statusResponse = await fetch('/api/whatsapp/status', {
-            credentials: 'include'
-          });
+            credentials: 'include',
+            signal: controller.signal,
+            // Prevent caching issues
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
+          }).finally(() => clearTimeout(timeoutId));
           
           if (statusResponse.ok) {
             const { messages, completed } = await statusResponse.json();
             
             // Update logs with new messages
-            messages.forEach((msg: any) => {
-              addLog(msg.message, msg.type);
-            });
+            if (messages && messages.length > 0) {
+              messages.forEach((msg: any) => {
+                addLog(msg.message, msg.type);
+              });
+            }
             
             // If completed, stop messaging
             if (completed) {
@@ -217,11 +271,18 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
               addLog('All messages sent successfully!', 'success');
               clearInterval(statusPolling);
             }
+          } else {
+            console.warn('Status response not OK:', statusResponse.status);
           }
         } catch (error) {
           console.error('Status polling error:', error);
+          
+          // Log nicer error message for timeouts
+          if (error instanceof Error && error.name === 'AbortError') {
+            console.warn('Status request timed out, will retry');
+          }
         }
-      }, 1000);
+      }, 3000); // Increased interval for Replit environment
       
     } catch (error) {
       addLog(`Error initializing messaging: ${error instanceof Error ? error.message : String(error)}`, 'error');
@@ -230,13 +291,56 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Stop messaging process
+  // Stop messaging process with improved reliability
   const stopMessaging = async () => {
     try {
-      await apiRequest('POST', '/api/whatsapp/stop', {});
+      // Try up to 3 times with timeout
+      let attempts = 0;
+      const maxAttempts = 3;
+      
+      while (attempts < maxAttempts) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          
+          const response = await fetch('/api/whatsapp/stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({}),
+            signal: controller.signal
+          }).finally(() => clearTimeout(timeoutId));
+          
+          if (response.ok) {
+            setIsMessaging(false);
+            addLog('Messaging stopped by user', 'warning');
+            return; // Success
+          } else {
+            attempts++;
+            if (attempts < maxAttempts) {
+              addLog(`Stop attempt ${attempts} failed, retrying...`, 'warning');
+              await new Promise(r => setTimeout(r, 1000));
+            }
+          }
+        } catch (error) {
+          attempts++;
+          if (error instanceof Error && error.name === 'AbortError') {
+            addLog(`Stop request timed out (attempt ${attempts}/${maxAttempts})`, 'warning');
+          } else {
+            addLog(`Error stopping (attempt ${attempts}/${maxAttempts}): ${error instanceof Error ? error.message : String(error)}`, 'warning');
+          }
+          
+          if (attempts < maxAttempts) {
+            await new Promise(r => setTimeout(r, 1000));
+          }
+        }
+      }
+      
+      // If we get here, all attempts failed but we'll still update UI
       setIsMessaging(false);
-      addLog('Messaging stopped by user', 'warning');
+      addLog('Messaging stopped, but server may not have received the stop command', 'warning');
     } catch (error) {
+      setIsMessaging(false); // Always update UI state even on error
       addLog(`Error stopping messaging: ${error instanceof Error ? error.message : String(error)}`, 'error');
     }
   };

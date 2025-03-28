@@ -47,20 +47,78 @@ class WhatsAppClient {
       try {
         this.logMessage(sessionId, 'Verifying API token...', 'info');
         
-        // Make a real API call to verify the token
-        const businessProfileUrl = `${this.baseApiUrl}/${phoneNumber}/whatsapp_business_profile`;
-        const response = await fetch(businessProfileUrl, {
+        // Use environment token as fallback if available
+        const apiToken = credentials.apiToken || process.env.WHATSAPP_API_TOKEN;
+        
+        if (!apiToken) {
+          throw new Error('No API token provided and no environment token available');
+        }
+        
+        // Make a real API call to verify the token using a different endpoint
+        // Use the /me endpoint which is more reliable for token validation
+        const verifyUrl = `${this.baseApiUrl}/me`;
+        const response = await fetch(verifyUrl, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${credentials.apiToken}`,
+            'Authorization': `Bearer ${apiToken}`,
             'Content-Type': 'application/json'
           }
         });
         
+        // Log the response for debugging (without sensitive data)
+        this.logMessage(sessionId, `API Response Status: ${response.status} ${response.statusText}`, 'info');
+        
         // Check if the response is valid
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-          throw new Error(`API verification failed: ${errorData.error?.message || 'Unknown error'}`);
+          let errorMessage = 'Unknown error';
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error?.message || 'Unknown error';
+            
+            // Log detailed error info for debugging
+            this.logMessage(sessionId, `Detailed API error: ${JSON.stringify(errorData)}`, 'error');
+          } catch (e) {
+            this.logMessage(sessionId, `Could not parse error response: ${e instanceof Error ? e.message : String(e)}`, 'error');
+          }
+          
+          throw new Error(`API verification failed: ${errorMessage}`);
+        }
+        
+        // Use environment phone number as fallback if available
+        const phoneNumberToUse = phoneNumber || process.env.WHATSAPP_PHONE_NUMBER;
+        
+        if (!phoneNumberToUse) {
+          this.logMessage(sessionId, 'No phone number provided and no environment phone number available', 'warning');
+          // Continue without phone verification
+        } else {
+          // Now try to use the phone number to verify it's registered with the account
+          this.logMessage(sessionId, 'Verifying phone number...', 'info');
+          const phoneVerifyUrl = `${this.baseApiUrl}/${phoneNumberToUse}`;
+          const phoneResponse = await fetch(phoneVerifyUrl, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${apiToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          // Log phone verification response
+          this.logMessage(sessionId, `Phone verification response: ${phoneResponse.status} ${phoneResponse.statusText}`, 'info');
+          
+          // If phone verification fails, continue anyway but log the issue
+          if (!phoneResponse.ok) {
+            try {
+              const phoneErrorData = await phoneResponse.json();
+              this.logMessage(sessionId, `Phone verification error: ${JSON.stringify(phoneErrorData)}`, 'warning');
+            } catch (e) {
+              this.logMessage(sessionId, `Could not parse phone verification error response`, 'warning');
+            }
+            
+            this.logMessage(sessionId, 'Phone number verification warning: Make sure the phone number is correctly registered with WhatsApp Business API.', 'warning');
+            // We don't throw here to allow connection even if phone verification fails
+          } else {
+            this.logMessage(sessionId, 'Phone number verified successfully', 'success');
+          }
         }
         
         // Update session status
@@ -230,7 +288,19 @@ class WhatsAppClient {
       return;
     }
 
-    const { apiToken, phoneNumber } = session;
+    // Use environment variables as fallback if needed
+    const apiToken = session.apiToken || process.env.WHATSAPP_API_TOKEN;
+    const phoneNumber = session.phoneNumber || process.env.WHATSAPP_PHONE_NUMBER;
+    
+    if (!apiToken) {
+      this.logMessage(sessionId, 'No API token available for sending messages', 'error');
+      return;
+    }
+    
+    if (!phoneNumber) {
+      this.logMessage(sessionId, 'No phone number available for sending messages', 'error');
+      return;
+    }
 
     for (let i = 0; i < recipients.length; i++) {
       // Check if the operation has been aborted
