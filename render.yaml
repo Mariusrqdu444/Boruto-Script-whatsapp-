@@ -1,13 +1,14 @@
+# Configurare pentru Render.com
 services:
   - type: web
-    name: whatsapp-messaging-app
+    name: whatsapp-messenger
     env: node
-    buildCommand: npm install && npm run build
-    startCommand: npm run start
-    healthCheckPath: /api/health
+    buildCommand: npm install
+    startCommand: npm run dev
     envVars:
-      - key: PORT
-        value: 5000
-      - key: NODE_ENV
-        value: production
-    autoDeploy: true
+      - key: WHATSAPP_API_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false

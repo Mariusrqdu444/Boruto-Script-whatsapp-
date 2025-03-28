@@ -1,99 +1,84 @@
-// Script pentru trimiterea de mesaje WhatsApp
+// Script simplu pentru trimiterea unui mesaj WhatsApp
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+const readline = require('readline').createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
 
-// Verificăm argumentele primite
-const args = process.argv.slice(2);
-if (args.length < 1) {
-  console.log('Utilizare: node send-message.js NUMĂR_DESTINAȚIE [MESAJ]');
-  console.log('Exemplu: node send-message.js 407xxxxxxxx "Acesta este un mesaj de test"');
-  process.exit(1);
-}
-
-// Preluam variabilele din argumente și mediu
-const targetNumber = args[0];
-const messageText = args[1] || 'Acesta este un mesaj de test din aplicația WhatsApp Messenger.';
+// Preluarea variabilelor de mediu
 const apiToken = process.env.WHATSAPP_API_TOKEN;
-const phoneNumber = process.env.WHATSAPP_PHONE_NUMBER;
+const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '606093835919104';
 
 async function sendMessage() {
-  console.log('=== Trimitere mesaj WhatsApp ===');
-  console.log(`Număr expeditor: ${phoneNumber}`);
-  console.log(`Număr destinatar: ${targetNumber}`);
-  console.log(`Mesaj: ${messageText}`);
-  console.log('--------------------------------');
-  
   if (!apiToken) {
     console.error('EROARE: Token-ul API WhatsApp lipsește din variabilele de mediu');
-    return false;
+    return;
   }
+
+  console.log('==== TRIMITERE MESAJ WHATSAPP ====');
   
-  if (!phoneNumber) {
-    console.error('EROARE: Numărul de telefon WhatsApp lipsește din variabilele de mediu');
-    return false;
-  }
-  
-  try {
-    console.log('Trimitem mesajul...');
-    
-    // Folosim ID-ul numărului de telefon (Phone Number ID)
-    // ID-ul furnizat de utilizator: 606093835919104
-    const phoneNumberId = process.env.WHATSAPP_PHONE_ID || '606093835919104';
-    console.log(`Folosim ID-ul numărului de telefon: ${phoneNumberId}`);
-    const messageUrl = `https://graph.facebook.com/v17.0/${phoneNumberId}/messages`;
-    const messageResponse = await fetch(messageUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to: targetNumber,
-        type: 'text',
-        text: { body: messageText }
-      })
-    });
-    
-    const messageData = await messageResponse.json();
-    console.log(`Cod de răspuns: ${messageResponse.status}`);
-    console.log('Răspuns API:', JSON.stringify(messageData, null, 2));
-    
-    if (messageResponse.ok) {
-      console.log('✅ Mesajul a fost trimis cu SUCCES!');
-      
-      // Afișăm ID-ul mesajului pentru referință
-      if (messageData.messages && messageData.messages.length > 0) {
-        console.log(`ID Mesaj: ${messageData.messages[0].id}`);
-      }
-      
-      return true;
-    } else {
-      console.error('❌ Trimiterea mesajului a EȘUAT!');
-      
-      // Afișăm informații detaliate despre eroare
-      if (messageData.error) {
-        console.error(`Cod eroare: ${messageData.error.code}`);
-        console.error(`Mesaj eroare: ${messageData.error.message}`);
-        
-        // Sugestii pentru erori comune
-        if (messageData.error.code === 132000) {
-          console.log('\nSugestie: Numărul de destinație trebuie să fie format internațional, fără "+" (ex: 407xxxxxxxx)');
-        }
-        if (messageData.error.message.includes('permission')) {
-          console.log('\nSugestie: Asigurați-vă că token-ul API are permisiunile necesare sau că numărul de telefon este corect asociat contului.');
-        }
-      }
-      
-      return false;
+  // 1. Solicită numărul destinatarului
+  readline.question('Introduceți numărul de telefon destinatar (cu cod de țară, ex: 407xxxxxxxx): ', async (phoneNumber) => {
+    // Adăugăm prefix + dacă lipsește
+    if (!phoneNumber.startsWith('+')) {
+      phoneNumber = '+' + phoneNumber;
     }
-  } catch (error) {
-    console.error('❌ EROARE la trimiterea mesajului:', error.message);
-    return false;
-  }
+    
+    console.log(`Număr destinatar formatat: ${phoneNumber}`);
+    
+    // 2. Solicită mesajul
+    readline.question('Introduceți mesajul de trimis: ', async (message) => {
+      console.log(`Mesaj: "${message}"`);
+      console.log(`Trimitem către: ${phoneNumber}`);
+      console.log(`Folosind Phone Number ID: ${phoneNumberId}`);
+      
+      try {
+        console.log('Trimitere în curs...');
+        
+        const response = await fetch(`https://graph.facebook.com/v17.0/${phoneNumberId}/messages`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: phoneNumber,
+            type: 'text',
+            text: { body: message }
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          console.log('✅ Mesaj trimis cu succes!');
+          console.log(`ID mesaj: ${data.messages?.[0]?.id}`);
+        } else {
+          console.error('❌ Eroare la trimiterea mesajului');
+          console.error('Cod de răspuns:', response.status);
+          console.error('Detalii eroare:', JSON.stringify(data, null, 2));
+          
+          // Sugestii pentru rezolvarea erorilor comune
+          if (data.error?.code === 100) {
+            console.log('\nSugestii pentru rezolvare:');
+            console.log('1. Verificați dacă numărul destinatar este în format corect (începe cu "+" urmat de codul țării)');
+            console.log('2. Asigurați-vă că numărul destinatar este înregistrat în WhatsApp');
+            console.log('3. Verificați dacă Phone Number ID-ul este corect');
+          }
+        }
+      } catch (error) {
+        console.error('Eroare neașteptată:', error.message);
+      }
+      
+      readline.close();
+    });
+  });
 }
 
-// Executăm trimiterea de mesaj
+// Rulăm funcția
 sendMessage().catch(err => {
   console.error('Eroare neașteptată:', err);
+  readline.close();
 });

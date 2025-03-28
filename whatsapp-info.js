@@ -1,109 +1,94 @@
-// Script pentru obținerea informațiilor despre contul WhatsApp Business
+// Script pentru verificarea informațiilor contului WhatsApp Business
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 // Preluarea variabilelor de mediu
 const apiToken = process.env.WHATSAPP_API_TOKEN;
+const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '606093835919104';
 
 async function getBusinessInfo() {
-  console.log('=== Informații Cont WhatsApp Business API ===');
-  console.log(`Token API disponibil: ${!!apiToken}`);
-  console.log('-------------------------------------------');
-  
   if (!apiToken) {
     console.error('EROARE: Token-ul API WhatsApp lipsește din variabilele de mediu');
-    return false;
+    return;
   }
+
+  console.log('==== INFORMAȚII CONT WHATSAPP BUSINESS ====');
   
   try {
-    // 1. Obținem informații de bază despre cont
-    console.log('1. Verificăm informații de bază despre cont...');
-    const accountInfoUrl = `https://graph.facebook.com/v17.0/me`;
-    const accountInfoResponse = await fetch(accountInfoUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Content-Type': 'application/json'
-      }
+    // Verificare cont
+    console.log('\n[1] Verificare cont Meta:');
+    const meResponse = await fetch('https://graph.facebook.com/v17.0/me', {
+      headers: { 'Authorization': `Bearer ${apiToken}` }
     });
     
-    const accountInfo = await accountInfoResponse.json();
-    console.log(`Cod de răspuns: ${accountInfoResponse.status}`);
-    console.log('Răspuns API (cont):', JSON.stringify(accountInfo, null, 2));
-    
-    if (!accountInfoResponse.ok) {
-      console.error('❌ Nu am putut obține informații despre cont!');
-      return false;
+    if (meResponse.ok) {
+      const meData = await meResponse.json();
+      console.log('✅ Token API valid!');
+      console.log('  Nume cont:', meData.name);
+      console.log('  ID cont:', meData.id);
+    } else {
+      console.error('❌ Token API invalid');
+      const errorData = await meResponse.json();
+      console.error('  Detalii eroare:', JSON.stringify(errorData, null, 2));
+      return;
     }
     
-    // 2. Încercăm să obținem aplicațiile asociate
-    console.log('\n2. Verificăm aplicațiile asociate cu contul...');
-    const appsUrl = `https://graph.facebook.com/v17.0/${accountInfo.id}/apps`;
-    const appsResponse = await fetch(appsUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Content-Type': 'application/json'
-      }
+    // Verificare ID număr de telefon
+    console.log('\n[2] Verificare Phone Number ID:');
+    const phoneIdResponse = await fetch(`https://graph.facebook.com/v17.0/${phoneNumberId}`, {
+      headers: { 'Authorization': `Bearer ${apiToken}` }
     });
     
-    const appsInfo = await appsResponse.json();
-    console.log(`Cod de răspuns: ${appsResponse.status}`);
-    console.log('Răspuns API (aplicații):', JSON.stringify(appsInfo, null, 2));
+    if (phoneIdResponse.ok) {
+      const phoneIdData = await phoneIdResponse.json();
+      console.log('✅ Phone Number ID valid!');
+      console.log('  Detalii:', JSON.stringify(phoneIdData, null, 2));
+    } else {
+      console.error('❌ Phone Number ID invalid');
+      const errorData = await phoneIdResponse.json();
+      console.error('  Detalii eroare:', JSON.stringify(errorData, null, 2));
+    }
     
-    // 3. Încercăm să obținem WA Business Accounts
-    console.log('\n3. Verificăm conturile WhatsApp Business...');
-    const wabaUrl = `https://graph.facebook.com/v17.0/${accountInfo.id}/whatsapp_business_accounts`;
-    const wabaResponse = await fetch(wabaUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    const wabaInfo = await wabaResponse.json();
-    console.log(`Cod de răspuns: ${wabaResponse.status}`);
-    console.log('Răspuns API (WABA):', JSON.stringify(wabaInfo, null, 2));
-    
-    // Dacă avem WABA, încercăm să obținem numerele de telefon asociate
-    if (wabaResponse.ok && wabaInfo.data && wabaInfo.data.length > 0) {
-      const wabaId = wabaInfo.data[0].id;
-      console.log(`\nWABA ID găsit: ${wabaId}`);
+    // Verificare template-uri
+    console.log('\n[3] Verificare template-uri disponibile:');
+    try {
+      // Utilizăm ID-ul contului pentru a verifica template-urile
+      const accountId = meData.id;
       
-      console.log('\n4. Verificăm numerele de telefon asociate cu WABA...');
-      const phoneNumbersUrl = `https://graph.facebook.com/v17.0/${wabaId}/phone_numbers`;
-      const phoneNumbersResponse = await fetch(phoneNumbersUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${apiToken}`,
-          'Content-Type': 'application/json'
-        }
+      const templatesResponse = await fetch(`https://graph.facebook.com/v17.0/${accountId}/message_templates`, {
+        headers: { 'Authorization': `Bearer ${apiToken}` }
       });
       
-      const phoneNumbersInfo = await phoneNumbersResponse.json();
-      console.log(`Cod de răspuns: ${phoneNumbersResponse.status}`);
-      console.log('Răspuns API (numere telefon):', JSON.stringify(phoneNumbersInfo, null, 2));
-      
-      if (phoneNumbersResponse.ok && phoneNumbersInfo.data && phoneNumbersInfo.data.length > 0) {
-        console.log('\nNumere de telefon găsite:');
-        phoneNumbersInfo.data.forEach((phone, index) => {
-          console.log(`${index + 1}. ${phone.display_phone_number} (ID: ${phone.id})`);
-        });
+      if (templatesResponse.ok) {
+        const templatesData = await templatesResponse.json();
+        console.log(`✅ Template-uri disponibile: ${templatesData.data?.length || 0}`);
+        
+        if (templatesData.data?.length > 0) {
+          console.log('  Lista template-uri:');
+          templatesData.data.forEach((template, i) => {
+            console.log(`  ${i+1}. ${template.name} (Status: ${template.status})`);
+          });
+        } else {
+          console.log('  Nu există template-uri configurate.');
+        }
+      } else {
+        console.error('❌ Eroare la verificarea template-urilor');
+        const errorData = await templatesResponse.json();
+        console.error('  Detalii eroare:', JSON.stringify(errorData, null, 2));
       }
+    } catch (error) {
+      console.error('❌ Eroare la verificarea template-urilor:', error.message);
     }
     
-    console.log('\n=== CONCLUZIE ===');
-    console.log('✅ Verificarea informațiilor a fost completată.');
-    console.log('Utilizați ID-urile din răspunsuri pentru a trimite mesaje.');
+    console.log('\n==== VERIFICARE COMPLETĂ ====');
+    console.log('Informații cont și configurare WhatsApp Business API verificate.');
+    console.log('Puteți utiliza aceste informații pentru configurarea aplicației.');
     
-    return true;
   } catch (error) {
-    console.error('❌ EROARE la obținerea informațiilor:', error.message);
-    return false;
+    console.error('Eroare neașteptată:', error.message);
   }
 }
 
-// Rulăm scriptul
+// Rulăm verificarea
 getBusinessInfo().catch(err => {
-  console.error('Eroare neașteptată:', err);
+  console.error('Eroare neașteptată în timpul verificării:', err);
 });
