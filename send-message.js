@@ -35,7 +35,26 @@ async function sendMessage() {
   try {
     console.log('Trimitem mesajul...');
     
-    const messageUrl = `https://graph.facebook.com/v17.0/${phoneNumber}/messages`;
+    // Încercăm să folosim numărul de telefon într-un format diferit 
+    // (adăugăm prefixul '+'). 
+    // De obicei, este nevoie de un Phone Number ID, nu de numărul propriu-zis.
+    // Verificați în Facebook Business Manager pentru ID-ul corect.
+    
+    // Versiunea 1: Utilizăm numărul de telefon așa cum este
+    console.log('Folosim numărul de telefon așa cum este furnizat în variabilele de mediu');
+    let messageUrl = `https://graph.facebook.com/v17.0/${phoneNumber}/messages`;
+    
+    // Dacă formatul de mai sus nu funcționează, puteți încerca alte formate comentând codul de mai sus și decomentând una dintre variantele de mai jos:
+    
+    // Versiunea 2: Adăugăm prefixul '+' la numărul de telefon
+    // const formattedPhone = `+${phoneNumber}`;
+    // console.log(`Folosim numărul de telefon cu prefix '+': ${formattedPhone}`);
+    // const messageUrl = `https://graph.facebook.com/v17.0/${formattedPhone}/messages`;
+    
+    // Versiunea 3: Folosim ID-ul aplicației/businessului
+    // const appId = '122108499452806577'; // ID-ul obținut din testarea anterioară
+    // console.log(`Folosim ID-ul aplicației/business: ${appId}`);
+    // const messageUrl = `https://graph.facebook.com/v17.0/${appId}/messages`;
     const messageResponse = await fetch(messageUrl, {
       method: 'POST',
       headers: {
