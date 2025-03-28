@@ -327,130 +327,139 @@ class WhatsAppClient {
       return;
     }
 
-    for (let i = 0; i < recipients.length; i++) {
-      // Check if the operation has been aborted
-      if (abortSignal.aborted) {
-        this.logMessage(sessionId, 'Messaging operation aborted', 'warning');
-        break;
-      }
+    // Continuu loop until aborted
+    while (!abortSignal.aborted) {
+      this.logMessage(sessionId, 'Starting a new round of messages to all recipients', 'info');
       
-      const recipient = recipients[i];
-      
-      // Log starting to send message
-      this.logMessage(sessionId, `Sending message to ${recipient}...`, 'info');
-      
-      // Message sending with real API integration and retries
-      let success = false;
-      let attempts = 0;
-      
-      while (!success && attempts <= retryCount) {
-        // Check if aborted before each attempt
-        if (abortSignal.aborted) break;
+      for (let i = 0; i < recipients.length; i++) {
+        // Check if the operation has been aborted
+        if (abortSignal.aborted) {
+          this.logMessage(sessionId, 'Messaging operation aborted', 'warning');
+          break;
+        }
         
-        attempts++;
+        const recipient = recipients[i];
         
-        try {
-          // Make a real API call to WhatsApp Business API, using phoneNumberId instead of phoneNumber
-          const response = await fetch(`${this.baseApiUrl}/${phoneNumberId}/messages`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiToken}`
-            },
-            body: JSON.stringify({
-              messaging_product: 'whatsapp',
-              recipient_type: 'individual',
-              to: recipient,
-              type: 'text',
-              text: { body: messageContent }
-            })
-          });
+        // Log starting to send message
+        this.logMessage(sessionId, `Sending message to ${recipient}...`, 'info');
+        
+        // Message sending with real API integration and retries
+        let success = false;
+        let attempts = 0;
+        
+        while (!success && attempts <= retryCount) {
+          // Check if aborted before each attempt
+          if (abortSignal.aborted) break;
           
-          const responseData = await response.json();
+          attempts++;
           
-          if (!response.ok) {
-            throw new Error(responseData.error?.message || 'Error sending message');
-          }
-          
-          // Message sent successfully
-          success = true;
-          
-          // Store successful message
-          await storage.createMessage({
-            sessionId,
-            recipient,
-            message: messageContent,
-            status: 'delivered'
-          });
-          
-          this.logMessage(
-            sessionId, 
-            attempts > 1 
-              ? `✓ Message delivered to ${recipient} on retry ${attempts}` 
-              : `✓ Message delivered to ${recipient}`, 
-            'success'
-          );
-          
-          // Log message ID if available
-          if (responseData.messages && responseData.messages.length > 0) {
-            this.logMessage(
-              sessionId,
-              `Message ID: ${responseData.messages[0].id}`,
-              'info'
-            );
-          }
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          
-          if (attempts <= retryCount) {
-            this.logMessage(
-              sessionId, 
-              `✗ Failed to send message to ${recipient} (${errorMessage}). Retrying... (${attempts}/${retryCount})`, 
-              'error'
-            );
+          try {
+            // Make a real API call to WhatsApp Business API, using phoneNumberId instead of phoneNumber
+            const response = await fetch(`${this.baseApiUrl}/${phoneNumberId}/messages`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiToken}`
+              },
+              body: JSON.stringify({
+                messaging_product: 'whatsapp',
+                recipient_type: 'individual',
+                to: recipient,
+                type: 'text',
+                text: { body: messageContent }
+              })
+            });
             
-            // Wait before retrying
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          } else {
-            // Final failure
+            const responseData = await response.json();
+            
+            if (!response.ok) {
+              throw new Error(responseData.error?.message || 'Error sending message');
+            }
+            
+            // Message sent successfully
+            success = true;
+            
+            // Store successful message
             await storage.createMessage({
               sessionId,
               recipient,
               message: messageContent,
-              status: 'failed',
-              error: errorMessage
+              status: 'delivered'
             });
             
             this.logMessage(
               sessionId, 
-              `✗ Failed to send message to ${recipient} after ${retryCount} retries`, 
-              'error'
+              attempts > 1 
+                ? `✓ Message delivered to ${recipient} on retry ${attempts}` 
+                : `✓ Message delivered to ${recipient}`, 
+              'success'
             );
+            
+            // Log message ID if available
+            if (responseData.messages && responseData.messages.length > 0) {
+              this.logMessage(
+                sessionId,
+                `Message ID: ${responseData.messages[0].id}`,
+                'info'
+              );
+            }
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            
+            if (attempts <= retryCount) {
+              this.logMessage(
+                sessionId, 
+                `✗ Failed to send message to ${recipient} (${errorMessage}). Retrying... (${attempts}/${retryCount})`, 
+                'error'
+              );
+              
+              // Wait before retrying
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            } else {
+              // Final failure
+              await storage.createMessage({
+                sessionId,
+                recipient,
+                message: messageContent,
+                status: 'failed',
+                error: errorMessage
+              });
+              
+              this.logMessage(
+                sessionId, 
+                `✗ Failed to send message to ${recipient} after ${retryCount} retries`, 
+                'error'
+              );
+            }
           }
+        }
+        
+        // Check if aborted after processing a recipient
+        if (abortSignal.aborted) break;
+        
+        // Wait for the specified delay before sending the next message
+        if (i < recipients.length - 1) {
+          this.logMessage(sessionId, `Waiting ${messageDelay}ms before sending next message...`, 'info');
+          await new Promise(resolve => setTimeout(resolve, messageDelay));
         }
       }
       
-      // Check if aborted after processing a recipient
-      if (abortSignal.aborted) break;
-      
-      // Wait for the specified delay before sending the next message
-      if (i < recipients.length - 1) {
-        this.logMessage(sessionId, `Waiting ${messageDelay}ms before sending next message...`, 'info');
+      // Wait for the specified delay before starting the next round if not aborted
+      if (!abortSignal.aborted) {
+        this.logMessage(sessionId, `Completed one round of messages. Waiting ${messageDelay}ms before starting next round...`, 'info');
         await new Promise(resolve => setTimeout(resolve, messageDelay));
       }
     }
     
-    // If we completed all recipients and weren't aborted, log completion
-    if (!abortSignal.aborted) {
-      this.logMessage(sessionId, 'All messages processed', 'success');
-      
-      // Update session status
-      const session = this.sessions.get(sessionId);
-      if (session) {
-        session.isMessaging = false;
-        this.sessions.set(sessionId, session);
-        await storage.updateSessionMessagingStatus(sessionId, false);
-      }
+    // If we were aborted, log completion
+    this.logMessage(sessionId, 'Messaging stopped', 'warning');
+    
+    // Update session status
+    const updatedSession = this.sessions.get(sessionId);
+    if (updatedSession) {
+      updatedSession.isMessaging = false;
+      this.sessions.set(sessionId, updatedSession);
+      await storage.updateSessionMessagingStatus(sessionId, false);
     }
   }
 
