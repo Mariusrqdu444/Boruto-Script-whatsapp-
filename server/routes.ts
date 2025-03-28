@@ -44,6 +44,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   console.log('Environment check:');
   console.log('WHATSAPP_PHONE_NUMBER exists:', !!process.env.WHATSAPP_PHONE_NUMBER);
   console.log('WHATSAPP_API_TOKEN exists:', !!process.env.WHATSAPP_API_TOKEN);
+  console.log('WHATSAPP_PHONE_NUMBER_ID exists:', !!process.env.WHATSAPP_PHONE_NUMBER_ID);
   
   // Health check and ping endpoints
   app.get("/health", (req, res) => {
@@ -62,13 +63,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/env-check", (req, res) => {
     const hasWhatsappToken = !!process.env.WHATSAPP_API_TOKEN;
     const hasPhoneNumber = !!process.env.WHATSAPP_PHONE_NUMBER;
+    const hasPhoneNumberId = !!process.env.WHATSAPP_PHONE_NUMBER_ID;
     
     // Only return if variables exist, not the actual values (for security)
     res.status(200).json({
       hasWhatsappToken,
       hasPhoneNumber,
-      // Provide phone number value for display but mask token
-      phoneNumberValue: hasPhoneNumber ? process.env.WHATSAPP_PHONE_NUMBER : null
+      hasPhoneNumberId,
+      // Provide phone number values for display but mask token
+      phoneNumberValue: hasPhoneNumber ? process.env.WHATSAPP_PHONE_NUMBER : null,
+      phoneNumberIdValue: hasPhoneNumberId ? process.env.WHATSAPP_PHONE_NUMBER_ID : null
     });
   });
 
@@ -97,6 +101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Parse request data
         const apiToken = req.body.apiToken;
         const phoneNumber = req.body.phoneNumber;
+        const phoneNumberId = req.body.phoneNumberId;
         const targetType = req.body.targetType;
         const targetNumbers = req.body.targetNumbers;
         const messageInputMethod = req.body.messageInputMethod;
@@ -107,6 +112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Use environment variables as fallback if not provided in request
         const finalApiToken = apiToken || process.env.WHATSAPP_API_TOKEN;
         const finalPhoneNumber = phoneNumber || process.env.WHATSAPP_PHONE_NUMBER;
+        const finalPhoneNumberId = phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID;
         
         // Validate required fields
         if (!finalApiToken) {
@@ -117,6 +123,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res
             .status(400)
             .json({ error: "Phone number is required. Please provide a phone number or set the WHATSAPP_PHONE_NUMBER environment variable." });
+        }
+        
+        if (!finalPhoneNumberId) {
+          return res
+            .status(400)
+            .json({ error: "Phone Number ID is required for WhatsApp Business API. Please provide an ID or set the WHATSAPP_PHONE_NUMBER_ID environment variable." });
         }
 
         if (!targetNumbers) {
@@ -142,6 +154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           id: sessionId,
           credentials: tokenCredentials,
           phoneNumber: finalPhoneNumber,
+          phoneNumberId: finalPhoneNumberId,
           targetType,
           targetNumbers,
           messageInputMethod,
@@ -156,11 +169,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isConnected: false,
         });
 
-        // Initialize WhatsApp client (using finalPhoneNumber that might be from env)
+        // Initialize WhatsApp client (using finalPhoneNumber and finalPhoneNumberId that might be from env)
         const initialized = await whatsAppClient.initialize(
           sessionId,
           tokenCredentials,
-          finalPhoneNumber
+          finalPhoneNumber,
+          finalPhoneNumberId
         );
 
         if (!initialized) {

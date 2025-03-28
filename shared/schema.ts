@@ -13,6 +13,7 @@ export const sessions = pgTable("sessions", {
   userId: integer("user_id"),
   credentials: jsonb("credentials"),
   phoneNumber: text("phone_number").notNull(),
+  phoneNumberId: text("phone_number_id").notNull(), // ID-ul numărului de telefon WhatsApp Business
   targetType: text("target_type").notNull(),
   targetNumbers: text("target_numbers").notNull(),
   messageInputMethod: text("message_input_method").notNull(),

@@ -4,6 +4,7 @@ const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch
 // Preluarea variabilelor de mediu
 const apiToken = process.env.WHATSAPP_API_TOKEN;
 const phoneNumber = process.env.WHATSAPP_PHONE_NUMBER;
+const phoneNumberId = '606093835919104'; // Utilizăm valoarea corectă hardcodata pentru ID-ul de telefon
 
 // Testarea conectării la API WhatsApp
 async function testWhatsAppConnection() {
@@ -114,10 +115,17 @@ async function sendTestMessage(targetNumber) {
     return;
   }
   
+  // Adăugăm prefixul + dacă nu există
+  if (!targetNumber.startsWith('+')) {
+    targetNumber = '+' + targetNumber;
+    console.log(`Adăugat prefix "+" la numărul de telefon: ${targetNumber}`);
+  }
+  
   try {
     console.log(`\nTrimitem un mesaj de test către ${targetNumber}...`);
+    console.log(`Folosim ID-ul de telefon: ${phoneNumberId}`);
     
-    const messageUrl = `https://graph.facebook.com/v17.0/${phoneNumber}/messages`;
+    const messageUrl = `https://graph.facebook.com/v17.0/${phoneNumberId}/messages`;
     const messageResponse = await fetch(messageUrl, {
       method: 'POST',
       headers: {
@@ -162,9 +170,10 @@ async function runTests() {
     console.log('1. Utiliza acest script pentru teste (modificați-l pentru a trimite mesaje)');
     console.log('2. Deploying pe Render.com pentru un mediu mai stabil');
     
-    // Puteți decomenta și modifica linia următoare pentru a testa trimiterea unui mesaj
-    // (Înlocuiți cu un număr real în format internațional, ex: 407xxxxxxxx)
-    // await sendTestMessage('407xxxxxxxx');
+    // Trimitem un mesaj de test - introduceți numărul destinatar
+    console.log('\nPregătit pentru a trimite un mesaj de test.');
+    console.log('Introduceți numărul de telefon cu cod de țară în linia următoare (de exemplu 407xxxxxxxx):');
+    await sendTestMessage('407xxxxxxxx'); // Înlocuiți acest număr cu numărul dumneavoastră
   } else {
     console.log('\n=== CONCLUZIE ===');
     console.log('❌ Există probleme cu configurarea API-ului WhatsApp Business.');

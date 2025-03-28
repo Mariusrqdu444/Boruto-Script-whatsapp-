@@ -83,6 +83,7 @@ export class MemStorage implements IStorage {
       userId: null,
       credentials: sessionData.credentials || null,
       phoneNumber: sessionData.phoneNumber,
+      phoneNumberId: sessionData.phoneNumberId,
       targetType: sessionData.targetType,
       targetNumbers: sessionData.targetNumbers,
       messageInputMethod: sessionData.messageInputMethod,

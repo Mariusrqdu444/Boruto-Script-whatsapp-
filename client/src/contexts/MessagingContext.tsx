@@ -10,6 +10,11 @@ type Credentials = {
   token: string;
 } | null;
 
+type PhoneData = {
+  phoneNumber: string;
+  phoneNumberId: string;
+};
+
 type MessageFile = {
   fileName: string;
   file: File;
@@ -31,6 +36,7 @@ type MessagingContextType = {
   isMessaging: boolean;
   credentials: Credentials;
   phoneNumber: string;
+  phoneNumberId: string; // ID-ul numărului de telefon pentru WhatsApp Business API
   targetType: TargetType;
   targetNumbers: string;
   messageInputMethod: MessageInputMethod;
@@ -42,6 +48,7 @@ type MessagingContextType = {
   logs: Log[];
   setCredentials: (credentials: Credentials) => void;
   setPhoneNumber: (phoneNumber: string) => void;
+  setPhoneNumberId: (phoneNumberId: string) => void; // Setter pentru ID-ul numărului de telefon
   setTargetType: (targetType: TargetType) => void;
   setTargetNumbers: (targetNumbers: string) => void;
   setMessageInputMethod: (method: MessageInputMethod) => void;
@@ -63,6 +70,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const [isMessaging, setIsMessaging] = useState(false);
   const [credentials, setCredentials] = useState<Credentials>(null);
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneNumberId, setPhoneNumberId] = useState(''); // Stare pentru ID-ul numărului de telefon
   const [targetType, setTargetType] = useState<TargetType>('individual');
   const [targetNumbers, setTargetNumbers] = useState('');
   const [messageInputMethod, setMessageInputMethod] = useState<MessageInputMethod>('direct');
@@ -118,8 +126,51 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       return { valid: false, message: 'Your phone number is required' };
     }
 
+    if (!phoneNumberId) {
+      return { valid: false, message: 'Phone Number ID is required for WhatsApp Business API' };
+    }
+    
+    // Validare specifică pentru ID-ul numărului de telefon
+    if (phoneNumberId === '12485197386') {
+      return { 
+        valid: false, 
+        message: 'ID-ul numărului de telefon nu este corect. Folosiți valoarea 606093835919104 în loc de 12485197386.' 
+      };
+    }
+
     if (!targetNumbers) {
       return { valid: false, message: 'No target recipients specified' };
+    }
+    
+    // Verificăm numerele de telefon și afișăm avertismente pentru formate incorecte
+    const phoneNumberLines = targetNumbers.split('\n').filter(line => line.trim().length > 0);
+    
+    if (phoneNumberLines.length === 0) {
+      return { valid: false, message: 'No valid phone numbers found' };
+    }
+    
+    // Dacă targetType nu este grup, verificăm formatul numerelor
+    if (targetType !== 'group') {
+      // Verificăm dacă numerele de telefon conțin codul de țară
+      const hasInvalidPhoneNumbers = phoneNumberLines.some(line => {
+        const trimmedLine = line.trim();
+        // Un număr valid ar trebui să înceapă cu + și să aibă minim 8 caractere
+        // Sau să nu înceapă cu + dar să aibă minim 7 caractere (codul țării)
+        if (trimmedLine.startsWith('+') && trimmedLine.length < 8) {
+          return true;
+        }
+        if (!trimmedLine.startsWith('+') && trimmedLine.length < 7) {
+          return true;
+        }
+        return false;
+      });
+      
+      if (hasInvalidPhoneNumbers) {
+        return { 
+          valid: false, 
+          message: 'Some phone numbers appear to be invalid. Make sure all numbers include country code (e.g., +40xxxxxxxx or 40xxxxxxxx)' 
+        };
+      }
     }
 
     if (messageInputMethod === 'direct' && !messageText) {
@@ -152,6 +203,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       }
       
       formData.append('phoneNumber', phoneNumber);
+      formData.append('phoneNumberId', phoneNumberId);
       formData.append('targetType', targetType);
       formData.append('targetNumbers', targetNumbers);
       formData.append('messageDelay', messageDelay.toString());
@@ -360,6 +412,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       isMessaging,
       credentials,
       phoneNumber,
+      phoneNumberId,
       targetType,
       targetNumbers,
       messageInputMethod,
@@ -371,6 +424,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       logs,
       setCredentials,
       setPhoneNumber,
+      setPhoneNumberId,
       setTargetType,
       setTargetNumbers,
       setMessageInputMethod,

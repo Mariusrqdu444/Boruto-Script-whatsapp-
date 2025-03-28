@@ -49,8 +49,20 @@ export default function TargetSection() {
         <p className="text-xs text-muted-foreground mt-1">
           {targetType === 'group'
             ? "Enter group IDs, one per line"
-            : "Enter phone numbers with country code, one per line (e.g., 491234567890)"}
+            : "Enter phone numbers with country code, one per line (with or without '+' prefix, e.g., +491234567890 or 491234567890)"}
         </p>
+        {targetType !== 'group' && (
+          <div className="mt-2 text-xs text-amber-500 bg-amber-950/30 px-3 py-2 rounded-md">
+            <strong>Important:</strong> Pentru API-ul WhatsApp Business, numerele de telefon trebuie să includă codul de țară.
+            Aplicația va adăuga automat prefixul '+' dacă lipsește.
+            <ul className="mt-1 ml-4 list-disc">
+              <li>Format corect: <code>+40712345678</code> sau <code>40712345678</code></li>
+              <li>Pentru România folosiți codul de țară 40</li>
+              <li>Nu includeți spații, paranteze sau liniuțe</li>
+              <li>Nu includeți primul 0 din numărul național (072... → +4072...)</li>
+            </ul>
+          </div>
+        )}
       </div>
       
       <Separator className="my-5" />

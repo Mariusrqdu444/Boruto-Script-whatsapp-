@@ -21,7 +21,8 @@ class WhatsAppClient {
   public async initialize(
     sessionId: string, 
     credentials: { apiToken: string }, 
-    phoneNumber: string
+    phoneNumber: string,
+    phoneNumberId: string
   ): Promise<boolean> {
     try {
       this.logMessage(sessionId, 'Initializing WhatsApp client...', 'info');
@@ -34,11 +35,22 @@ class WhatsAppClient {
       if (!phoneNumber) {
         throw new Error('Phone number is required');
       }
+      
+      if (!phoneNumberId) {
+        throw new Error('Phone Number ID is required for WhatsApp Business API');
+      }
+      
+      // Verificare pentru ID-ul corect al numărului de telefon
+      if (phoneNumberId === '12485197386') {
+        this.logMessage(sessionId, 'ID-ul numărului de telefon 12485197386 este incorect. Valoarea corectă este 606093835919104.', 'error');
+        throw new Error('ID-ul numărului de telefon nu este corect. Folosiți valoarea 606093835919104 în loc de 12485197386.');
+      }
 
       // Store session with API token
       this.sessions.set(sessionId, {
         apiToken: credentials.apiToken,
         phoneNumber,
+        phoneNumberId,
         isConnected: false,
         isMessaging: false
       });
@@ -178,10 +190,17 @@ class WhatsAppClient {
       
       this.logMessage(sessionId, 'Starting to send messages...', 'info');
       
-      // Parse recipients
+      // Parse recipients and ensure they have the + prefix for WhatsApp API
       const recipients = targetNumbers
         .split('\n')
-        .map(r => r.trim())
+        .map(r => {
+          // Adăugăm prefixul + dacă nu există deja
+          let formatted = r.trim();
+          if (formatted && !formatted.startsWith('+')) {
+            formatted = '+' + formatted;
+          }
+          return formatted;
+        })
         .filter(r => r.length > 0);
       
       if (recipients.length === 0) {
@@ -291,6 +310,7 @@ class WhatsAppClient {
     // Use environment variables as fallback if needed
     const apiToken = session.apiToken || process.env.WHATSAPP_API_TOKEN;
     const phoneNumber = session.phoneNumber || process.env.WHATSAPP_PHONE_NUMBER;
+    const phoneNumberId = session.phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID;
     
     if (!apiToken) {
       this.logMessage(sessionId, 'No API token available for sending messages', 'error');
@@ -299,6 +319,11 @@ class WhatsAppClient {
     
     if (!phoneNumber) {
       this.logMessage(sessionId, 'No phone number available for sending messages', 'error');
+      return;
+    }
+    
+    if (!phoneNumberId) {
+      this.logMessage(sessionId, 'No Phone Number ID available for sending messages', 'error');
       return;
     }
 
@@ -325,8 +350,8 @@ class WhatsAppClient {
         attempts++;
         
         try {
-          // Make a real API call to WhatsApp Business API
-          const response = await fetch(`${this.baseApiUrl}/${phoneNumber}/messages`, {
+          // Make a real API call to WhatsApp Business API, using phoneNumberId instead of phoneNumber
+          const response = await fetch(`${this.baseApiUrl}/${phoneNumberId}/messages`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
